@@ -96,7 +96,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 py-12">
-      <NeonParticles density={30} zIndex={-1} />
+      <NeonParticles density={30} />
 
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">

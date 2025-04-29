@@ -1,5 +1,3 @@
-// lib/supabase-server.ts
-// Questo file contiene utility per l'uso di Supabase nel contesto server (Server Components)
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 

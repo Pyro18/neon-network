@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons"
 import { NeonCard } from "@/components/neon-card"
 import { useAuth } from "@/hooks/use-auth"
+import { createClient } from "@/lib/supabase"
 
 const registerSchema = z.object({
   username: z
@@ -54,38 +55,59 @@ export function RegisterForm() {
     setIsLoading(true)
     
     try {
-      // Prepare user metadata
-      const userData = {
-        username: values.username,
-      }
+      console.log("Starting registration process with basic info");
       
-      const { error, user } = await signUp(values.email, values.password, userData)
+      // Try with minimal data first - no custom metadata
+      const { error, user } = await signUp(values.email, values.password, {})
       
       if (error) {
-        console.error("Registration error:", error)
-        if (error.message.includes("User already registered")) {
-          toast.error("This email is already registered")
+        console.error("Registration error:", error);
+        console.error("Error details:", {
+          message: error.message,
+          name: error.name,
+          status: error.status,
+        });
+        
+        // Specific error handling
+        if (error.message.includes("Database error saving new user")) {
+          toast.error("Unable to create your account. There might be a problem with our database. Please try again later or contact support.");
+        } else if (error.message.includes("User already registered")) {
+          toast.error("This email is already registered");
         } else {
-          toast.error("Failed to create account. Please try again.")
+          toast.error(`Registration failed: ${error.message}`);
         }
-        return
+        return;
+      }
+      
+      // If registration is successful, then try to update the user metadata separately
+      // This helps to isolate if the metadata is causing the issue
+      if (user) {
+        try {
+          const supabase = createClient();
+          await supabase.auth.updateUser({
+            data: { username: values.username }
+          });
+        } catch (metadataError) {
+          console.error("Error updating user metadata:", metadataError);
+          // This is not critical, so we'll continue with the flow
+        }
       }
       
       // Check if email confirmation is required
       if (user && !user.email_confirmed_at) {
-        toast.success("Registration successful! Please check your email to confirm your account.")
-        router.push("/auth/verify-email")
+        toast.success("Registration successful! Please check your email to confirm your account.");
+        router.push("/auth/verify-email");
       } else {
         // If confirmation not required, go to dashboard
-        toast.success("Account created successfully!")
-        router.push("/")
-        router.refresh()
+        toast.success("Account created successfully!");
+        router.push("/");
+        router.refresh();
       }
     } catch (error) {
-      console.error("Unexpected error during registration:", error)
-      toast.error("An unexpected error occurred")
+      console.error("Unexpected error during registration:", error);
+      toast.error("An unexpected error occurred during registration. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
