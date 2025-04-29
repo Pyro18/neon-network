@@ -14,8 +14,7 @@ const fontSans = FontSans({
 
 export const metadata: Metadata = {
   title: "NeonNetwork | Minecraft Server",
-  description: "Join the NeonNetwork Minecraft server community",
-    generator: 'v0.dev'
+  description: "Unisciti alla comunità del server Minecraft NeonNetwork"
 }
 
 export default function RootLayout({
