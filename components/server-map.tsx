@@ -77,11 +77,11 @@ function MapBase() {
   }, [camera])
 
   const regions = [
-    { name: "Spawn", position: [0, 0, 0], color: "#0ef", playerCount: 12 },
-    { name: "Survival", position: [2, 0, 2], color: "#0f0", playerCount: 24 },
-    { name: "Creative", position: [-2, 0, -2], color: "#f0e", playerCount: 8 },
-    { name: "Minigames", position: [-2, 0, 2], color: "#ff0", playerCount: 15 },
-    { name: "PvP Arena", position: [2, 0, -2], color: "#f00", playerCount: 6 },
+    { name: "Spawn", position: [0, 0, 0] as [number, number, number], color: "#0ef", playerCount: 12 },
+    { name: "Survival", position: [2, 0, 2] as [number, number, number], color: "#0f0", playerCount: 24 },
+    { name: "Creative", position: [-2, 0, -2] as [number, number, number], color: "#f0e", playerCount: 8 },
+    { name: "Minigames", position: [-2, 0, 2] as [number, number, number], color: "#ff0", playerCount: 15 },
+    { name: "PvP Arena", position: [2, 0, -2] as [number, number, number], color: "#f00", playerCount: 6 },
   ]
 
   return (
