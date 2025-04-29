@@ -1,17 +1,20 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons"
 import { NeonCard } from "@/components/neon-card"
+import { useAuth } from "@/hooks/use-auth"
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -21,6 +24,8 @@ const loginSchema = z.object({
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const { signIn } = useAuth()
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -30,16 +35,32 @@ export function LoginForm() {
     },
   })
 
-  function onSubmit(values: z.infer<typeof loginSchema>) {
+  async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true)
-
-    // This is just a frontend demo, so we'll simulate a login
-    console.log("Login values:", values)
-
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      const { error } = await signIn(values.email, values.password)
+      
+      if (error) {
+        console.error("Login error:", error)
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Invalid email or password")
+        } else {
+          toast.error("Failed to sign in. Please try again.")
+        }
+        return
+      }
+      
+      // Successfully logged in
+      toast.success("Logged in successfully")
+      router.push("/")
+      router.refresh()
+    } catch (error) {
+      console.error("Unexpected error during login:", error)
+      toast.error("An unexpected error occurred")
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (

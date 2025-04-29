@@ -1,10 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox"
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons"
 import { NeonCard } from "@/components/neon-card"
+import { useAuth } from "@/hooks/use-auth"
 
 const registerSchema = z.object({
   username: z
@@ -34,6 +37,8 @@ const registerSchema = z.object({
 export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const { signUp } = useAuth()
 
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
@@ -45,16 +50,43 @@ export function RegisterForm() {
     },
   })
 
-  function onSubmit(values: z.infer<typeof registerSchema>) {
+  async function onSubmit(values: z.infer<typeof registerSchema>) {
     setIsLoading(true)
-
-    // This is just a frontend demo, so we'll simulate registration
-    console.log("Register values:", values)
-
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      // Prepare user metadata
+      const userData = {
+        username: values.username,
+      }
+      
+      const { error, user } = await signUp(values.email, values.password, userData)
+      
+      if (error) {
+        console.error("Registration error:", error)
+        if (error.message.includes("User already registered")) {
+          toast.error("This email is already registered")
+        } else {
+          toast.error("Failed to create account. Please try again.")
+        }
+        return
+      }
+      
+      // Check if email confirmation is required
+      if (user && !user.email_confirmed_at) {
+        toast.success("Registration successful! Please check your email to confirm your account.")
+        router.push("/auth/verify-email")
+      } else {
+        // If confirmation not required, go to dashboard
+        toast.success("Account created successfully!")
+        router.push("/")
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Unexpected error during registration:", error)
+      toast.error("An unexpected error occurred")
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
   return (

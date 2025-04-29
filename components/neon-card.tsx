@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const neonCardVariants = cva(
-  "rounded-lg border bg-background/20 backdrop-blur-sm text-card-foreground shadow-sm relative overflow-hidden group",
+  "rounded-lg border bg-background/20 backdrop-blur-sm text-card-foreground shadow-sm relative overflow-hidden",
   {
     variants: {
       variant: {
@@ -20,37 +20,58 @@ const neonCardVariants = cva(
   },
 )
 
-export interface NeonCardProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof neonCardVariants> {}
+export interface NeonCardProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof neonCardVariants> {
+  disableGlow?: boolean;
+}
 
-const NeonCard = forwardRef<HTMLDivElement, NeonCardProps>(({ className, variant, ...props }, ref) => {
-  const getGlowColor = () => {
-    switch (variant) {
-      case "blue":
-        return "#3b82f6"
-      case "purple":
-        return "#8b5cf6"
-      case "pink":
-        return "#ec4899"
-      case "green":
-        return "#10b981"
-      default:
-        return "#0ef"
+const NeonCard = forwardRef<HTMLDivElement, NeonCardProps>(
+  ({ className, variant, disableGlow = false, style, ...props }, ref) => {
+    const getGlowColor = () => {
+      switch (variant) {
+        case "blue":
+          return "#3b82f6"
+        case "purple":
+          return "#8b5cf6"
+        case "pink":
+          return "#ec4899"
+        case "green":
+          return "#10b981"
+        default:
+          return "#0ef"
+      }
     }
-  }
 
-  return (
-    <div ref={ref} className={cn(neonCardVariants({ variant, className }))} {...props}>
-      {props.children}
-      <span
-        className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500"
+    const glowStyle = !disableGlow
+      ? {
+          ...style,
+          boxShadow: `inset 0 0 20px ${getGlowColor()}00`,
+          background: `radial-gradient(circle, ${getGlowColor()}00 0%, transparent 70%)`,
+          transition: "box-shadow 0.5s, background 0.5s",
+        }
+      : style;
+
+    const hoverStyle = {
+      "&:hover": {
+        boxShadow: !disableGlow ? `inset 0 0 20px ${getGlowColor()}` : undefined,
+        background: !disableGlow
+          ? `radial-gradient(circle, ${getGlowColor()}10 0%, transparent 70%)`
+          : undefined,
+      },
+    };
+
+    return (
+      <div
+        ref={ref}
+        className={cn(neonCardVariants({ variant, className }))}
         style={{
-          boxShadow: `inset 0 0 20px ${getGlowColor()}`,
-          background: `radial-gradient(circle, ${getGlowColor()}10 0%, transparent 70%)`,
+          ...glowStyle,
+          ...hoverStyle,
         }}
+        {...props}
       />
-    </div>
-  )
-})
+    )
+  }
+)
 
 NeonCard.displayName = "NeonCard"
 

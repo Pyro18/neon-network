@@ -1,18 +1,41 @@
 "use client"
+
+import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 interface SocialLoginButtonsProps {
   isLoading?: boolean
 }
 
 export function SocialLoginButtons({ isLoading = false }: SocialLoginButtonsProps) {
+  const { signInWithOAuth } = useAuth()
+
+  const handleDiscordLogin = async () => {
+    try {
+      await signInWithOAuth("discord")
+    } catch (error) {
+      console.error("Error during Discord login:", error)
+      toast.error("Failed to connect with Discord")
+    }
+  }
+
+  const handleMicrosoftLogin = async () => {
+    try {
+      await signInWithOAuth("azure")  // For Microsoft/Xbox accounts (which include Minecraft)
+    } catch (error) {
+      console.error("Error during Microsoft login:", error)
+      toast.error("Failed to connect with Microsoft")
+    }
+  }
+
   return (
     <div className="grid grid-cols-2 gap-4">
       <Button
         variant="outline"
         className="bg-background/50 border-[#5865F2]/50 hover:bg-[#5865F2]/10 hover:text-[#5865F2] hover:border-[#5865F2]/80 transition-all"
         disabled={isLoading}
-        onClick={() => console.log("Discord login clicked")}
+        onClick={handleDiscordLogin}
       >
         <svg
           className="mr-2 h-4 w-4 text-[#5865F2]"
@@ -42,7 +65,7 @@ export function SocialLoginButtons({ isLoading = false }: SocialLoginButtonsProp
         variant="outline"
         className="bg-background/50 border-[#107C10]/50 hover:bg-[#107C10]/10 hover:text-[#107C10] hover:border-[#107C10]/80 transition-all"
         disabled={isLoading}
-        onClick={() => console.log("Microsoft login clicked")}
+        onClick={handleMicrosoftLogin}
       >
         <svg
           className="mr-2 h-4 w-4 text-[#107C10]"

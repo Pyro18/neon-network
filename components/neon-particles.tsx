@@ -19,6 +19,7 @@ interface NeonParticlesProps {
   density?: number
   followMouse?: boolean
   colors?: string[]
+  zIndex?: number
 }
 
 export function NeonParticles({
@@ -26,6 +27,7 @@ export function NeonParticles({
   density = 50,
   followMouse = true,
   colors = ["#0ef", "#f0e", "#0f0", "#ff0"],
+  zIndex = -1,
 }: NeonParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
@@ -150,5 +152,14 @@ export function NeonParticles({
     }
   }, [density, followMouse, colors])
 
-  return <canvas ref={canvasRef} className={cn("fixed inset-0 pointer-events-none z-0", className)} />
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className={cn(
+        "fixed inset-0 pointer-events-none",
+        className
+      )} 
+      style={{ zIndex }}
+    />
+  )
 }

@@ -79,7 +79,7 @@ export function ServerStatus({ className, compact = false }: ServerStatusProps) 
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">IP Address</span>
-          <span className="text-xs font-medium">play.neonnetwork.mc</span>
+          <span className="text-xs font-medium">mc.neonnetwork.it</span>
         </div>
       </div>
     </div>

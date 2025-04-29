@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { AuthProvider } from "@/hooks/use-auth"
+import { Toaster } from "sonner"
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -14,7 +16,7 @@ const fontSans = FontSans({
 
 export const metadata: Metadata = {
   title: "NeonNetwork | Minecraft Server",
-  description: "Unisciti alla comunità del server Minecraft NeonNetwork"
+  description: "Join the Minecraft server NeonNetwork community"
 }
 
 export default function RootLayout({
@@ -25,11 +27,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background font-sans antialiased flex flex-col", fontSans.variable)}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+            <Toaster position="top-right" richColors />
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   )

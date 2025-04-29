@@ -5,7 +5,7 @@ import { NeonParticles } from "@/components/neon-particles"
 export default function RegisterPage() {
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 py-12">
-      <NeonParticles density={30} />
+      <NeonParticles density={30} zIndex={-1} />
 
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">
