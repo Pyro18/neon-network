@@ -69,63 +69,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      console.log('Starting signUp process with data:', { email, userData })
-      
-      // Try alternative approach - first sign up without metadata
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // Sign up with just email and password, no metadata
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+          emailRedirectTo: 'http://localhost:3000/auth/callback',
+        }
       })
       
-      if (signUpError) {
-        console.error('Supabase signUp error:', signUpError)
-        console.error('Error details:', {
-          message: signUpError.message,
-          status: signUpError.status,
-          name: signUpError.name
-        })
-        return { error: signUpError, user: null }
-      }
+      if (error) return { error, user: null }
       
-      // If we successfully created the user, update metadata separately
+      // If successful and we have metadata to add, update the user separately
       if (data?.user && Object.keys(userData).length > 0) {
-        try {
-          const { error: updateError } = await supabase.auth.updateUser({
-            data: userData
-          })
-          
-          if (updateError) {
-            console.error('Error updating user metadata:', updateError)
-          }
-        } catch (updateError) {
-          console.error('Unexpected error updating user metadata:', updateError)
-        }
+        await supabase.auth.updateUser({ data: userData })
       }
       
-      console.log('SignUp successful, user data:', data?.user)
       return { error: null, user: data?.user ?? null }
     } catch (e) {
       console.error('Unexpected error during signUp:', e)
-      const error = e as AuthError
-      return { error, user: null }
+      return { error: e as AuthError, user: null }
     }
   }
-
+  
   const signInWithOAuth = async (provider: Provider) => {
     try {
-      // Per Discord, utilizza l'URL di callback corretto come specificato nella documentazione
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // Utilizza questo URL per il reindirizzamento post-auth
           redirectTo: `${window.location.origin}/auth/callback`,
-          // Per Discord, aggiungi questi parametri di query per assicurare che il token funzioni
+          skipBrowserRedirect: false,
           ...(provider === 'discord' && {
             scopes: 'identify email',
-            skipBrowserRedirect: false,
           })
         },
       });

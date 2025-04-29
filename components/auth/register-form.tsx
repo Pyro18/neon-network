@@ -14,7 +14,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox"
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons"
 import { NeonCard } from "@/components/neon-card"
-import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 
 const registerSchema = z.object({
@@ -39,7 +38,7 @@ export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const { signUp } = useAuth()
+  const supabase = createClient()
 
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
@@ -55,59 +54,55 @@ export function RegisterForm() {
     setIsLoading(true)
     
     try {
-      console.log("Starting registration process with basic info");
-      
-      // Try with minimal data first - no custom metadata
-      const { error, user } = await signUp(values.email, values.password, {})
+      // Step 1: Basic signup without metadata first
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          emailRedirectTo: "http://localhost:3000/auth/callback",
+        }
+      })
       
       if (error) {
-        console.error("Registration error:", error);
-        console.error("Error details:", {
-          message: error.message,
-          name: error.name,
-          status: error.status,
-        });
+        console.error("Registration error:", error)
         
-        // Specific error handling
-        if (error.message.includes("Database error saving new user")) {
-          toast.error("Unable to create your account. There might be a problem with our database. Please try again later or contact support.");
-        } else if (error.message.includes("User already registered")) {
-          toast.error("This email is already registered");
+        if (error.message.includes("User already registered")) {
+          toast.error("This email is already registered")
         } else {
-          toast.error(`Registration failed: ${error.message}`);
+          toast.error(`Registration failed: ${error.message}`)
         }
-        return;
+        return
       }
       
-      // If registration is successful, then try to update the user metadata separately
-      // This helps to isolate if the metadata is causing the issue
-      if (user) {
+      // Step 2: If successful, update the user with metadata
+      if (data?.user) {
         try {
-          const supabase = createClient();
-          await supabase.auth.updateUser({
+          const { error: updateError } = await supabase.auth.updateUser({
             data: { username: values.username }
-          });
+          })
+          
+          if (updateError) {
+            console.warn("Couldn't update username, but signup was successful:", updateError)
+          }
         } catch (metadataError) {
-          console.error("Error updating user metadata:", metadataError);
-          // This is not critical, so we'll continue with the flow
+          console.warn("Error updating username:", metadataError)
         }
       }
       
-      // Check if email confirmation is required
-      if (user && !user.email_confirmed_at) {
-        toast.success("Registration successful! Please check your email to confirm your account.");
-        router.push("/auth/verify-email");
+      // Step 3: Direct user appropriately
+      if (data?.user && !data.user.email_confirmed_at) {
+        toast.success("Registration successful! Please check your email to confirm your account.")
+        router.push("/auth/verify-email")
       } else {
-        // If confirmation not required, go to dashboard
-        toast.success("Account created successfully!");
-        router.push("/");
-        router.refresh();
+        toast.success("Account created successfully!")
+        router.push("/")
+        router.refresh()
       }
     } catch (error) {
-      console.error("Unexpected error during registration:", error);
-      toast.error("An unexpected error occurred during registration. Please try again.");
+      console.error("Unexpected error during registration:", error)
+      toast.error("An unexpected error occurred during registration. Please try again.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
   }
 
