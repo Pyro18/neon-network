@@ -1,351 +1,559 @@
 import { createClient } from '@/lib/supabase'
-
-// Funzione helper per gestire gli errori delle query Supabase
-const handleSupabaseError = (error: any, message: string) => {
-  console.error(`${message}:`, error)
-  throw new Error(message)
-}
-
-// CATEGORIE
+import { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 
 /**
- * Ottiene tutte le categorie del forum
+ * Types representing the database schema
  */
-export async function getCategories() {
-  const supabase = createClient()
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select('*')
-    .order('position', { ascending: true })
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento delle categorie')
-  }
-
-  return data || []
+export type ForumCategory = {
+  id: string
+  name: string
+  description: string
+  icon: string
+  sort_order: number
+  color: string
+  created_at: string
+  updated_at: string
 }
 
-/**
- * Ottiene una categoria specifica dal suo slug
- */
-export async function getCategoryBySlug(slug: string) {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('slug', slug)
-    .single()
-
-  if (error) {
-    handleSupabaseError(error, `Categoria "${slug}" non trovata`)
-  }
-
-  return data
+export type ForumThread = {
+  id: string
+  title: string
+  category_id: string
+  author_id: string
+  is_pinned: boolean
+  is_locked: boolean
+  views: number
+  created_at: string
+  updated_at: string
+  category?: ForumCategory
+  author?: ForumUser
+  reply_count?: number
 }
 
-// THREAD
+export type ForumPost = {
+  id: string
+  thread_id: string
+  author_id: string
+  content: string
+  is_original_post: boolean
+  created_at: string
+  updated_at: string
+  author?: ForumUser
+  likes?: number
+  liked_by_current_user?: boolean
+}
 
-/**
- * Ottiene tutti i thread di una categoria specifica
- */
-export async function getThreads(categoryId: string, page = 1, limit = 10) {
-  const supabase = createClient()
+export type ForumUser = {
+  id: string
+  username: string
+  avatar_url: string
+  role: string
+  join_date: string
+  post_count: number
+}
 
-  const from = (page - 1) * limit
-  const to = from + limit - 1
-
-  const { data, error, count } = await supabase
-    .from('threads')
-    .select(`
-      *,
-      category:categories(id, name, slug),
-      author:user_profiles(id, username, avatar_url, role),
-      posts(count)
-    `, { count: 'exact' })
-    .eq('category_id', categoryId)
-    .order('is_pinned', { ascending: false })
-    .order('last_post_at', { ascending: false })
-    .range(from, to)
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento dei thread')
-  }
-
-  return {
-    threads: data || [],
-    totalThreads: count || 0,
-    totalPages: Math.ceil((count || 0) / limit)
-  }
+export type ForumStats = {
+  total_threads: number
+  total_posts: number
+  total_members: number
+  newest_member?: ForumUser
+  active_user_count: number
+  todays_posts: number
 }
 
 /**
- * Ottiene i thread più recenti
+ * Error handling helpers
  */
-export async function getRecentThreads(limit = 5) {
-  const supabase = createClient()
 
-  const { data, error } = await supabase
-    .from('threads')
-    .select(`
-      *,
-      category:categories(id, name, slug),
-      author:user_profiles(id, username, avatar_url, role),
-      posts(count)
-    `)
-    .order('last_post_at', { ascending: false })
-    .limit(limit)
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento dei thread recenti')
-  }
-
-  return data || []
+type Result<T> = {
+  data: T | null
+  error: Error | PostgrestError | null
 }
 
 /**
- * Ottiene un thread specifico
+ * Forum API functions
  */
-export async function getThread(threadId: string) {
+
+export async function getForumCategories(): Promise<Result<ForumCategory[]>> {
   const supabase = createClient()
 
-  // Prima otteniamo i dettagli del thread
-  const { data: thread, error: threadError } = await supabase
-    .from('threads')
-    .select(`
-      *,
-      category:categories(id, name, slug),
-      author:user_profiles(id, username, avatar_url, role)
-    `)
-    .eq('id', threadId)
-    .single()
-
-  if (threadError) {
-    handleSupabaseError(threadError, 'Thread non trovato')
-  }
-
-  // Incrementiamo il contatore delle visualizzazioni
   try {
-    await supabase
-      .rpc('view_thread', { _thread_id: threadId })
+    const { data, error } = await supabase
+      .from('forum_categories')
+      .select('*')
+      .order('sort_order', { ascending: true })
+
+    if (error) throw error
+
+    return { data, error: null }
   } catch (error) {
-    console.error('Errore nell\'incremento del contatore visualizzazioni:', error)
-  }
-
-  return thread
-}
-
-/**
- * Crea un nuovo thread
- */
-export async function createThread(title: string, categoryId: string, content: string) {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .rpc('create_thread_with_post', {
-      _title: title,
-      _category_id: categoryId,
-      _content: content
-    })
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nella creazione del thread')
-  }
-
-  return data
-}
-
-// POSTS
-
-/**
- * Ottiene i post di un thread specifico
- */
-export async function getPosts(threadId: string, page = 1, limit = 20) {
-  const supabase = createClient()
-
-  const from = (page - 1) * limit
-  const to = from + limit - 1
-
-  const { data, error, count } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      author:user_profiles(id, username, avatar_url, role, post_count, joined_at),
-      likes(count)
-    `, { count: 'exact' })
-    .eq('thread_id', threadId)
-    .order('created_at', { ascending: true })
-    .range(from, to)
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento dei post')
-  }
-
-  return {
-    posts: data || [],
-    totalPosts: count || 0,
-    totalPages: Math.ceil((count || 0) / limit)
+    console.error('Error fetching forum categories:', error)
+    return { data: null, error: error as Error | PostgrestError }
   }
 }
 
-/**
- * Crea una risposta a un thread
- */
-export async function createReply(threadId: string, content: string) {
+export async function getForumThreads(
+  options: {
+    categoryId?: string
+    page?: number
+    limit?: number
+    includeReplyCounts?: boolean
+  } = {}
+): Promise<Result<{ threads: ForumThread[], total: number }>> {
+  const {
+    categoryId,
+    page = 1,
+    limit = 10,
+    includeReplyCounts = true
+  } = options
+
   const supabase = createClient()
+  const offset = (page - 1) * limit
 
-  const { data, error } = await supabase
-    .rpc('create_reply', {
-      _thread_id: threadId,
-      _content: content
-    })
+  try {
+    let query = supabase
+      .from('forum_threads')
+      .select(`
+        *,
+        category:forum_categories(*),
+        author:profiles(id, username, avatar_url, role)
+      `, { count: 'exact' })
 
-  if (error) {
-    handleSupabaseError(error, 'Errore nella creazione della risposta')
-  }
+    if (categoryId) {
+      query = query.eq('category_id', categoryId)
+    }
 
-  return data
-}
+    // Get threads with pagination
+    const { data: threads, error, count } = await query
+      .order('is_pinned', { ascending: false })
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-// LIKES
+    if (error) throw error
 
-/**
- * Mette o toglie un like a un post
- */
-export async function toggleLike(postId: string) {
-  const supabase = createClient()
+    // If we need reply counts, fetch them
+    if (includeReplyCounts && threads) {
+      const threadsWithReplyCounts = await addReplyCountsToThreads(supabase, threads)
+      return {
+        data: {
+          threads: threadsWithReplyCounts,
+          total: count || threadsWithReplyCounts.length
+        },
+        error: null
+      }
+    }
 
-  const { data, error } = await supabase
-    .rpc('toggle_like', { _post_id: postId })
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nell\'aggiornamento del like')
-  }
-
-  return data
-}
-
-// SEGNALAZIONI
-
-/**
- * Segnala un post
- */
-export async function reportPost(postId: string, reason: string) {
-  const supabase = createClient()
-
-  const { error } = await supabase
-    .rpc('report_post', {
-      _post_id: postId,
-      _reason: reason
-    })
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nella segnalazione del post')
-  }
-
-  return true
-}
-
-// STATISTICHE
-
-/**
- * Ottiene le statistiche del forum
- */
-export async function getForumStats() {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .rpc('get_forum_stats')
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento delle statistiche')
-  }
-
-  return data || {
-    totalThreads: 0,
-    totalPosts: 0,
-    totalMembers: 0,
-    newestMember: { username: 'Nessuno' },
-    activeUsers: 0,
-    todaysPosts: 0
+    return {
+      data: {
+        threads: threads || [],
+        total: count || 0
+      },
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching forum threads:', error)
+    return { data: null, error: error as Error | PostgrestError }
   }
 }
 
-// MODERAZIONE
-
-/**
- * Blocca o sblocca un thread
- */
-export async function toggleThreadLock(threadId: string) {
+export async function getRecentThreads(limit = 5): Promise<Result<ForumThread[]>> {
   const supabase = createClient()
 
-  const { data, error } = await supabase
-    .rpc('toggle_thread_lock', { _thread_id: threadId })
+  try {
+    const { data, error } = await supabase
+      .from('forum_threads')
+      .select(`
+        *,
+        category:forum_categories(id, name),
+        author:profiles(id, username, avatar_url, role)
+      `)
+      .order('updated_at', { ascending: false })
+      .limit(limit)
 
-  if (error) {
-    handleSupabaseError(error, 'Errore nel blocco/sblocco del thread')
+    if (error) throw error
+
+    // Add reply counts to each thread
+    if (data) {
+      const threadsWithReplyCounts = await addReplyCountsToThreads(supabase, data)
+      return { data: threadsWithReplyCounts, error: null }
+    }
+
+    return { data: [], error: null }
+  } catch (error) {
+    console.error('Error fetching recent threads:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function getThreadById(threadId: string): Promise<Result<{ thread: ForumThread, posts: ForumPost[] }>> {
+  const supabase = createClient()
+
+  try {
+    // Fetch the thread with its category and author
+    const { data: thread, error: threadError } = await supabase
+      .from('forum_threads')
+      .select(`
+        *,
+        category:forum_categories(*),
+        author:profiles(id, username, avatar_url, role, created_at, post_count)
+      `)
+      .eq('id', threadId)
+      .single()
+
+    if (threadError) throw threadError
+
+    // Increment view count
+    await supabase
+      .rpc('increment_thread_view', { thread_id: threadId })
+
+    // Fetch the posts for this thread
+    const { data: posts, error: postsError } = await supabase
+      .from('forum_posts')
+      .select(`
+        *,
+        author:profiles(id, username, avatar_url, role, created_at, post_count)
+      `)
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true })
+
+    if (postsError) throw postsError
+
+    // Get the current user to check if they liked any posts
+    const { data: { session } } = await supabase.auth.getSession()
+    const currentUserId = session?.user?.id
+
+    // If we have a logged in user, check which posts they've liked
+    if (currentUserId && posts) {
+      const { data: likes } = await supabase
+        .from('forum_post_likes')
+        .select('post_id')
+        .eq('user_id', currentUserId)
+
+      const likedPostIds = likes?.map(like => like.post_id) || []
+
+      // Add the liked_by_current_user flag to each post
+      posts.forEach(post => {
+        post.liked_by_current_user = likedPostIds.includes(post.id)
+      })
+    }
+
+    // Get like counts for each post
+    if (posts) {
+      const postIds = posts.map(post => post.id)
+      // Use proper Supabase query for counting
+      for (const post of posts) {
+        const { count } = await supabase
+          .from('forum_post_likes')
+          .select('*', { count: 'exact' })
+          .eq('post_id', post.id);
+
+        post.likes = count || 0;
+      }
+    }
+
+    return {
+      data: {
+        thread,
+        posts: posts || []
+      },
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching thread by id:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function createThread(
+  data: {
+    title: string
+    content: string
+    categoryId: string
+    isPinned?: boolean
+    isLocked?: boolean
+  }
+): Promise<Result<{ threadId: string }>> {
+  const supabase = createClient()
+
+  // Get the current user session
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) {
+    return { data: null, error: new Error('You must be logged in to create a thread') }
   }
 
-  return data
+  // Start a transaction using a stored procedure
+  try {
+    const { data: result, error } = await supabase
+      .rpc('create_thread_with_post', {
+        p_title: data.title,
+        p_content: data.content,
+        p_category_id: data.categoryId,
+        p_is_pinned: data.isPinned || false,
+        p_is_locked: data.isLocked || false
+      })
+
+    if (error) throw error
+
+    return { data: { threadId: result }, error: null }
+  } catch (error) {
+    console.error('Error creating thread:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function createPost(
+  data: {
+    threadId: string
+    content: string
+  }
+): Promise<Result<ForumPost>> {
+  const supabase = createClient()
+
+  // Get the current user session
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) {
+    return { data: null, error: new Error('You must be logged in to create a post') }
+  }
+
+  try {
+    // First check if the thread is locked
+    const { data: thread, error: threadError } = await supabase
+      .from('forum_threads')
+      .select('is_locked')
+      .eq('id', data.threadId)
+      .single()
+
+    if (threadError) throw threadError
+
+    if (thread.is_locked) {
+      return { data: null, error: new Error('This thread is locked and cannot receive new replies') }
+    }
+
+    // Create the post
+    const { data: post, error } = await supabase
+      .from('forum_posts')
+      .insert({
+        thread_id: data.threadId,
+        author_id: session.user.id,
+        content: data.content,
+        is_original_post: false
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    // Update the thread's updated_at timestamp
+    await supabase
+      .from('forum_threads')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', data.threadId)
+
+    // Increment the user's post count
+    await supabase
+      .rpc('increment_user_post_count', { user_id: session.user.id })
+
+    return { data: post, error: null }
+  } catch (error) {
+    console.error('Error creating post:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function togglePostLike(postId: string): Promise<Result<{ liked: boolean }>> {
+  const supabase = createClient()
+
+  // Get the current user session
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) {
+    return { data: null, error: new Error('You must be logged in to like a post') }
+  }
+
+  try {
+    // Check if the user has already liked this post
+    const { data: existingLike, error: checkError } = await supabase
+      .from('forum_post_likes')
+      .select('*')
+      .eq('post_id', postId)
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+
+    if (checkError) throw checkError
+
+    if (existingLike) {
+      // User already liked this post, so remove the like
+      const { error: unlikeError } = await supabase
+        .from('forum_post_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', session.user.id)
+
+      if (unlikeError) throw unlikeError
+
+      return { data: { liked: false }, error: null }
+    } else {
+      // User hasn't liked this post yet, so add a like
+      const { error: likeError } = await supabase
+        .from('forum_post_likes')
+        .insert({
+          post_id: postId,
+          user_id: session.user.id
+        })
+
+      if (likeError) throw likeError
+
+      return { data: { liked: true }, error: null }
+    }
+  } catch (error) {
+    console.error('Error toggling post like:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function reportContent(
+  data: {
+    contentType: 'thread' | 'post'
+    contentId: string
+    reason: string
+    details?: string
+  }
+): Promise<Result<{ reportId: string }>> {
+  const supabase = createClient()
+
+  // Get the current user session
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) {
+    return { data: null, error: new Error('You must be logged in to report content') }
+  }
+
+  try {
+    const { data: report, error } = await supabase
+      .from('forum_reports')
+      .insert({
+        reporter_id: session.user.id,
+        content_type: data.contentType,
+        content_id: data.contentId,
+        reason: data.reason,
+        details: data.details || null,
+        status: 'pending'
+      })
+      .select('id')
+      .single()
+
+    if (error) throw error
+
+    return { data: { reportId: report.id }, error: null }
+  } catch (error) {
+    console.error('Error reporting content:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
+}
+
+export async function getForumStats(): Promise<Result<ForumStats>> {
+  const supabase = createClient()
+
+  try {
+    // Query for forum statistics
+    const { data, error } = await supabase
+      .rpc('get_forum_stats')
+
+    if (error) throw error
+
+    // Get the newest member
+    const { data: newestMember, error: memberError } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, role, created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (memberError && memberError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      throw memberError
+    }
+
+    // Get active user count
+    const { count: activeUserCount, error: activeError } = await supabase
+      .from('user_sessions')
+      .select('*', { count: 'exact' })
+      .gt('last_seen_at', new Date(Date.now() - 15 * 60 * 1000).toISOString()) // active in last 15 minutes
+
+    if (activeError) throw activeError
+
+    // Get today's post count
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const { count: todaysPosts, error: todaysError } = await supabase
+      .from('forum_posts')
+      .select('*', { count: 'exact' })
+      .gte('created_at', today.toISOString())
+
+    if (todaysError) throw todaysError
+
+    return {
+      data: {
+        total_threads: data.total_threads || 0,
+        total_posts: data.total_posts || 0,
+        total_members: data.total_members || 0,
+        newest_member: newestMember ? {
+          id: newestMember.id,
+          username: newestMember.username,
+          avatar_url: newestMember.avatar_url,
+          role: newestMember.role,
+          join_date: newestMember.created_at,
+          post_count: 0 // Default value since we don't have this info
+        } : undefined,
+        active_user_count: activeUserCount || 0,
+        todays_posts: todaysPosts || 0
+      },
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching forum stats:', error)
+    return { data: null, error: error as Error | PostgrestError }
+  }
 }
 
 /**
- * Pinna o spinna un thread
+ * Helper functions
  */
-export async function toggleThreadPin(threadId: string) {
-  const supabase = createClient()
 
-  const { data, error } = await supabase
-    .rpc('toggle_thread_pin', { _thread_id: threadId })
+async function addReplyCountsToThreads(
+  supabase: SupabaseClient,
+  threads: ForumThread[]
+): Promise<ForumThread[]> {
+  if (!threads.length) return threads
 
-  if (error) {
-    handleSupabaseError(error, 'Errore nel pin/unpin del thread')
+  // Get the thread IDs
+  const threadIds = threads.map(thread => thread.id)
+
+  // Query for post counts
+  const postCounts: Array<{ thread_id: string, count: string }> = [];
+
+  // Count posts for each thread individually
+  for (const thread of threads) {
+    const { count } = await supabase
+      .from('forum_posts')
+      .select('*', { count: 'exact' })
+      .eq('thread_id', thread.id);
+
+    if (count !== null) {
+      postCounts.push({ thread_id: thread.id, count: count.toString() });
+    }
   }
 
-  return data
-}
+  // Create a map of thread ID to reply count
+  const replyCountMap = new Map<string, number>()
+  postCounts.forEach((item: { thread_id: string, count: string }) => {
+    // Subtract 1 from the count to get the reply count (excluding the original post)
+    const count = parseInt(item.count) - 1
+    replyCountMap.set(item.thread_id, count > 0 ? count : 0)
+  })
 
-/**
- * Ottiene tutte le segnalazioni in attesa
- */
-export async function getPendingReports() {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .from('reports')
-    .select(`
-      *,
-      post:posts(*),
-      reporter:user_profiles!reports_reporter_id_fkey(username, avatar_url)
-    `)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nel caricamento delle segnalazioni')
-  }
-
-  return data || []
-}
-
-/**
- * Risolve una segnalazione
- */
-export async function resolveReport(reportId: string, action: 'approve' | 'reject') {
-  const supabase = createClient()
-
-  const { error } = await supabase
-    .from('reports')
-    .update({
-      status: action === 'approve' ? 'approved' : 'rejected',
-      resolved_at: new Date().toISOString()
-    })
-    .eq('id', reportId)
-
-  if (error) {
-    handleSupabaseError(error, 'Errore nella risoluzione della segnalazione')
-  }
-
-  return true
+  // Add the reply count to each thread
+  return threads.map(thread => ({
+    ...thread,
+    reply_count: replyCountMap.get(thread.id) || 0
+  }))
 }
