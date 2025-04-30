@@ -22,8 +22,8 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mb-8">
-            Join the most vibrant Minecraft community with unique gameplay experiences, custom plugins, and an amazing
-            player base.
+            Lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien 
+            vitae pellentesque sem placerat in.
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center mb-12">
@@ -46,16 +46,9 @@ export default function HomePage() {
           <div className="flex-1">
             <h2 className="text-3xl font-bold tracking-tight mb-4">Interactive Server Map</h2>
             <p className="text-muted-foreground mb-6">
-              Explore our server's unique regions and game modes with our interactive 3D map. Plan your adventures,
-              discover hidden locations, and see where other players are building.
+              Lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien vitae pellentesque sem placerat 
+              in id cursus mi pretium tellus duis convallis tempus leo.
             </p>
-            <div className="flex flex-wrap gap-3">
-              <NeonButton variant="blue">
-                <MapIcon className="mr-2 h-4 w-4" />
-                Full Map
-              </NeonButton>
-              <NeonButton variant="green">Teleport Points</NeonButton>
-            </div>
           </div>
           <div className="flex-1 h-[400px] w-full">
             <ServerMap />

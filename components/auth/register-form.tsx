@@ -54,7 +54,6 @@ export function RegisterForm() {
     setIsLoading(true)
     
     try {
-      // Step 1: Basic signup without metadata first
       const { data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,

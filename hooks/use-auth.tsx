@@ -69,7 +69,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      // Sign up with just email and password, no metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -97,11 +96,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
           skipBrowserRedirect: false,
-          ...(provider === 'discord' && {
-            scopes: 'identify email',
-          })
+          scopes: provider === 'discord' ? 'identify email' : undefined
         },
       });
       

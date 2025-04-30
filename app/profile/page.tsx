@@ -6,6 +6,7 @@ import { UserProfile } from "@/components/auth/user-profile"
 import { NeonParticles } from "@/components/neon-particles"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
+import { DiscordLogoIcon } from "@radix-ui/react-icons"
 import Link from "next/link"
 
 export default function ProfilePage() {
@@ -31,7 +32,6 @@ export default function ProfilePage() {
     )
   }
 
-  // If redirecting (user is null), don't render anything
   if (!user) {
     return null
   }
@@ -54,46 +54,10 @@ export default function ProfilePage() {
 
               <div className="space-y-3">
                 <Button variant="outline" className="w-full justify-start">
-                  <svg
-                    className="mr-2 h-4 w-4 text-[#5865F2]"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="9" cy="12" r="1" />
-                    <circle cx="15" cy="12" r="1" />
-                    <path d="M7.5 7.2C8.4 6.5 9.7 6 11 6c2.7 0 5.3 1.3 7 2" />
-                    <path d="M7 16.8c.9.7 2.2 1.2 3.5 1.2 2.7 0 5.3-1.3 7-2" />
-                    <path d="M18 9.2c.9 1.7 1.4 3.5 1.4 5.2 0 1.4-.3 2.7-.8 3.8" />
-                    <path d="M6 9.2C5.1 10.9 4.6 12.7 4.6 14.4c0 1.4.3 2.7.8 3.8" />
-                    <path d="M4.6 14.4c0 3.1 1.8 6.3 4.4 8.3A10 10 0 0 0 12 24c1.1 0 2.2-.1 3.1-.4" />
-                    <path d="M19.4 14.4c0 3.1-1.8 6.3-4.4 8.3A10 10 0 0 1 12 24c-1.1 0-2.2-.1-3.1-.4" />
-                  </svg>
+                  <DiscordLogoIcon className="w-4 h-4 mr-2" />
                   {user.identities?.find(i => i.provider === 'discord') 
                     ? 'Discord Connected' 
                     : 'Connect Discord Account'}
-                </Button>
-
-                <Button variant="outline" className="w-full justify-start">
-                  <svg
-                    className="mr-2 h-4 w-4 text-[#107C10]"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z" />
-                  </svg>
-                  {user.identities?.find(i => i.provider === 'azure') 
-                    ? 'Microsoft Connected' 
-                    : 'Connect Microsoft Account'}
                 </Button>
               </div>
             </div>

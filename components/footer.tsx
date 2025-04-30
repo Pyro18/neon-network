@@ -6,10 +6,8 @@ import {
   Users,
   HelpCircle,
   Ticket,
-  Github,
-  DiscIcon as Discord,
-  Twitter,
 } from "lucide-react"
+import { DiscordLogoIcon as Discord, InstagramLogoIcon as Instagram } from "@radix-ui/react-icons"
 import { NeonLogo } from "@/components/neon-logo"
 
 export function Footer() {
@@ -35,8 +33,7 @@ export function Footer() {
 
   const socialLinks = [
     { href: "https://discord.gg/neonnetwork", label: "Discord", icon: Discord },
-    { href: "https://twitter.com/neonnetwork", label: "Twitter", icon: Twitter },
-    { href: "https://github.com/neonnetwork", label: "GitHub", icon: Github },
+    { href: "https://instagram.com/neonnetwork", label: "Instagram", icon: Instagram },
   ]
 
   return (
@@ -49,8 +46,9 @@ export function Footer() {
               <NeonLogo />
             </Link>
             <p className="mt-4 text-sm text-muted-foreground">
-              NeonNetwork is a vibrant Minecraft community with unique gameplay experiences, custom plugins, and an
-              amazing player base.
+            Lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien vitae pellentesque sem 
+            placerat in id cursus mi pretium 
+            tellus duis convallis tempus leo.
             </p>
             <div className="mt-4 flex space-x-4">
               {socialLinks.map((link) => (
@@ -103,10 +101,10 @@ export function Footer() {
             <h3 className="text-lg font-medium mb-4">Server Information</h3>
             <p className="text-sm text-muted-foreground mb-2">Join our Minecraft server at:</p>
             <p className="text-sm font-mono bg-background/50 p-2 rounded border border-border/30 mb-4">
-              play.neonnetwork.mc
+              mc.neonnetwork.it
             </p>
-            <p className="text-sm text-muted-foreground">Server version: 1.20.4</p>
-            <p className="text-sm text-muted-foreground">Supported versions: 1.19 - 1.20.4</p>
+            <p className="text-sm text-muted-foreground">Server version: 1.21.5</p>
+            <p className="text-sm text-muted-foreground">Supported versions: 1.19 - 1.21.5</p>
           </div>
         </div>
 

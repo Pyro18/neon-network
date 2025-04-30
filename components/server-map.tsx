@@ -1,11 +1,9 @@
 "use client"
 
-import type React from "react"
-
 import { useRef, useState, useEffect } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { OrbitControls, Text, Environment } from "@react-three/drei"
-import { Vector3 } from "three"
+import { OrbitControls, Text, Environment, Html } from "@react-three/drei"
+import { Vector3, Scene } from "three"
 import { cn } from "@/lib/utils"
 import type * as THREE from "three"
 
@@ -69,19 +67,35 @@ function MapRegion({
 }
 
 function MapBase() {
-  const { camera } = useThree()
+  const { camera, gl } = useThree()
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
+  const sceneRef = useRef<THREE.Scene>(null)
 
   useEffect(() => {
     camera.position.set(5, 5, 5)
   }, [camera])
 
+  useEffect(() => {
+    const handleGlobalClick = (event: MouseEvent) => {
+      if (selectedRegion) {
+        setSelectedRegion(null)
+      }
+    }
+
+    const canvas = gl.domElement
+    canvas.addEventListener('click', handleGlobalClick)
+
+    return () => {
+      canvas.removeEventListener('click', handleGlobalClick)
+    }
+  }, [gl, selectedRegion])
+
   const regions = [
     { name: "Spawn", position: [0, 0, 0] as [number, number, number], color: "#0ef", playerCount: 12 },
     { name: "Survival", position: [2, 0, 2] as [number, number, number], color: "#0f0", playerCount: 24 },
-    { name: "Creative", position: [-2, 0, -2] as [number, number, number], color: "#f0e", playerCount: 8 },
-    { name: "Minigames", position: [-2, 0, 2] as [number, number, number], color: "#ff0", playerCount: 15 },
-    { name: "PvP Arena", position: [2, 0, -2] as [number, number, number], color: "#f00", playerCount: 6 },
+    { name: "SkyBlock", position: [-2, 0, -2] as [number, number, number], color: "#f0e", playerCount: 8 },
+    { name: "BOOH", position: [-2, 0, 2] as [number, number, number], color: "#ff0", playerCount: 15 },
+    { name: "BOOOOH 2", position: [2, 0, -2] as [number, number, number], color: "#f00", playerCount: 6 },
   ]
 
   return (
@@ -107,13 +121,28 @@ function MapBase() {
         />
       ))}
 
-      {/* Info panel */}
+      {/* Info panel - using drei's Html component */}
       {selectedRegion && (
-        <Html position={[0, 2, 0]}>
-          <div className="bg-background/80 backdrop-blur-sm p-4 rounded-lg border border-primary/50 w-64">
-            <h3 className="text-lg font-bold mb-2">{selectedRegion}</h3>
+        <Html position={[0, 2, 0]} center distanceFactor={10}>
+          <div 
+            className="bg-background/80 backdrop-blur-sm p-4 rounded-lg border border-primary/50 w-64 pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-white hover:bg-primary/20 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedRegion(null);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <h3 className="text-lg font-bold mb-2 pr-6">{selectedRegion}</h3>
             <p className="text-sm text-muted-foreground">
-              Click to teleport to this location in-game using /warp {selectedRegion.toLowerCase()}
+              Lorem ipsum dolor sit amet consectetur adipiscing elit quisque. {selectedRegion.toLowerCase()}
             </p>
           </div>
         </Html>
@@ -121,36 +150,6 @@ function MapBase() {
 
       <Environment preset="night" />
     </>
-  )
-}
-
-// Html component for overlay information
-function Html({ children, position }: { children: React.ReactNode; position: [number, number, number] }) {
-  const { camera } = useThree()
-  const [coords, setCoords] = useState({ x: 0, y: 0 })
-
-  useFrame(() => {
-    const vector = new Vector3(...position)
-    vector.project(camera)
-
-    setCoords({
-      x: (vector.x * 0.5 + 0.5) * 100,
-      y: (-(vector.y * 0.5) + 0.5) * 100,
-    })
-  })
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: `${coords.x}%`,
-        top: `${coords.y}%`,
-        transform: "translate(-50%, -50%)",
-        pointerEvents: "none",
-      }}
-    >
-      {children}
-    </div>
   )
 }
 

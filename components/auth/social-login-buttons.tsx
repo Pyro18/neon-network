@@ -20,17 +20,8 @@ export function SocialLoginButtons({ isLoading = false }: SocialLoginButtonsProp
     }
   }
 
-  const handleMicrosoftLogin = async () => {
-    try {
-      await signInWithOAuth("azure")  // For Microsoft/Xbox accounts (which include Minecraft)
-    } catch (error) {
-      console.error("Error during Microsoft login:", error)
-      toast.error("Failed to connect with Microsoft")
-    }
-  }
-
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <Button
         variant="outline"
         className="bg-background/50 border-[#5865F2]/50 hover:bg-[#5865F2]/10 hover:text-[#5865F2] hover:border-[#5865F2]/80 transition-all"
@@ -59,25 +50,6 @@ export function SocialLoginButtons({ isLoading = false }: SocialLoginButtonsProp
           <path d="M19.4 14.4c0 3.1-1.8 6.3-4.4 8.3A10 10 0 0 1 12 24c-1.1 0-2.2-.1-3.1-.4" />
         </svg>
         Discord
-      </Button>
-
-      <Button
-        variant="outline"
-        className="bg-background/50 border-[#107C10]/50 hover:bg-[#107C10]/10 hover:text-[#107C10] hover:border-[#107C10]/80 transition-all"
-        disabled={isLoading}
-        onClick={handleMicrosoftLogin}
-      >
-        <svg
-          className="mr-2 h-4 w-4 text-[#107C10]"
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z" />
-        </svg>
-        Microsoft
       </Button>
     </div>
   )
