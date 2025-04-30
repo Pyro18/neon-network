@@ -97,15 +97,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         provider,
         options: {
           skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/auth/callback`,
           scopes: provider === 'discord' ? 'identify email' : undefined
         },
       });
       
       if (error) {
         console.error(`Error in signInWithOAuth for ${provider}:`, error);
+        throw error;
       }
     } catch (error) {
       console.error(`Unexpected error in signInWithOAuth:`, error);
+      throw error;
     }
   }
 

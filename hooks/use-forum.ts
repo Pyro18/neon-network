@@ -1,3 +1,5 @@
+"use client"
+
 /**
  * Custom hooks for interacting with forum data
  */

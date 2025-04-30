@@ -1,12 +1,12 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
+import { useAuth } from "@/hooks/use-auth"
+import { RoleGate } from "@/components/auth/role-gate"
 import { NeonButton } from "@/components/neon-button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { Markdown } from "@/components/forum/markdown"
+import { toast } from "sonner"
+import Link from "next/link"
 
 interface ForumReplyFormProps {
   threadId: string
@@ -15,52 +15,87 @@ interface ForumReplyFormProps {
 export function ForumReplyForm({ threadId }: ForumReplyFormProps) {
   const [content, setContent] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { user } = useAuth()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
     if (!content.trim()) return
 
     setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/forum', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create_post',
+          threadId,
+          content,
+        }),
+      })
 
-    // Simulate API call
-    setTimeout(() => {
-      console.log("Submitting reply:", { threadId, content })
-      setIsSubmitting(false)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to create post')
+      }
+
+      toast.success('Reply posted successfully')
       setContent("")
-      // In a real app, you would add the new post to the thread
-    }, 1000)
+      // You might want to trigger a refresh of the thread here
+    } catch (error) {
+      console.error('Error posting reply:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to post reply')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <Tabs defaultValue="write">
-        <TabsList className="bg-background/20 backdrop-blur-sm border border-border/30">
-          <TabsTrigger value="write">Write</TabsTrigger>
-          <TabsTrigger value="preview" disabled={!content}>
-            Preview
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="write" className="mt-4">
-          <Textarea
-            placeholder="Write your reply here... Markdown is supported."
-            className="min-h-[200px] bg-background/20 backdrop-blur-sm border-border/30"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            disabled={isSubmitting}
-          />
-        </TabsContent>
-        <TabsContent value="preview" className="mt-4">
-          <div className="min-h-[200px] p-4 rounded-md border border-border/30 bg-background/20 backdrop-blur-sm">
-            {content ? <Markdown content={content} /> : <p className="text-muted-foreground">Nothing to preview</p>}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end mt-4">
-        <NeonButton type="submit" disabled={!content.trim() || isSubmitting}>
-          {isSubmitting ? "Posting..." : "Post Reply"}
-        </NeonButton>
+  if (!user) {
+    return (
+      <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6 text-center">
+        <p className="text-muted-foreground mb-4">You need to be logged in to reply to this thread.</p>
+        <Link href="/auth/login">
+          <NeonButton variant="blue">
+            Sign In
+          </NeonButton>
+        </Link>
       </div>
-    </form>
+    )
+  }
+
+  // Define the role IDs that are allowed to post
+  // You should replace these with your actual Discord role IDs
+  const allowedRoleIds = [
+    process.env.NEXT_PUBLIC_DISCORD_MANAGER_ROLE_ID,
+    process.env.NEXT_PUBLIC_DISCORD_MODERATOR_ROLE_ID,
+  ].filter(Boolean) as string[]
+
+  return (
+    <RoleGate
+      requiredRoleIds={allowedRoleIds}
+      fallback={
+        <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6 text-center">
+          <p className="text-muted-foreground">You need to have the Manager or Moderator role on Discord to post replies.</p>
+        </div>
+      }
+    >
+      <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6">
+        <Textarea
+          placeholder="Write your reply here... Markdown is supported."
+          className="min-h-[200px] bg-background/20 backdrop-blur-sm border-border/30"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          disabled={isSubmitting}
+        />
+        <div className="mt-4 flex justify-end">
+          <NeonButton
+            onClick={handleSubmit}
+            disabled={isSubmitting || !content.trim()}
+          >
+            {isSubmitting ? "Posting..." : "Post Reply"}
+          </NeonButton>
+        </div>
+      </div>
+    </RoleGate>
   )
 }
