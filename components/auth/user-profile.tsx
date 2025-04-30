@@ -30,10 +30,9 @@ export function UserProfile() {
   }
 
   // Extract user metadata
-  const username = user.user_metadata?.username || 'User'
-  
-  // Get avatar from Discord or use fallback
-  const avatarUrl = user.identities?.find(i => i.provider === 'discord')?.identity_data?.avatar_url || null
+  const username = user.user_metadata?.username || "User"
+
+  const avatarUrl = user.identities?.find((i) => i.provider === "discord")?.identity_data?.avatar_url || null
 
   return (
     <NeonCard className="p-6">
@@ -50,9 +49,9 @@ export function UserProfile() {
           <p className="text-sm text-muted-foreground truncate">{user.email}</p>
         </div>
 
-        <Button 
-          variant="outline" 
-          size="icon" 
+        <Button
+          variant="outline"
+          size="icon"
           onClick={handleSignOut}
           className="text-destructive hover:text-destructive hover:bg-destructive/10"
         >
@@ -65,25 +64,25 @@ export function UserProfile() {
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Account Type</span>
           <span className="font-medium">
-            {user.app_metadata?.provider === 'discord' && 'Discord'}
-            {user.app_metadata?.provider === 'azure' && 'Microsoft'}
-            {user.app_metadata?.provider === 'email' && 'Email'}
+            {user.app_metadata?.provider === "discord" && "Discord"}
+            {user.app_metadata?.provider === "azure" && "Microsoft"}
+            {user.app_metadata?.provider === "email" && "Email"}
           </span>
         </div>
 
-        {user.identities?.find(i => i.provider === 'discord') && (
+        {user.identities?.find((i) => i.provider === "discord") && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Discord Username</span>
             <span className="font-medium">
-              {user.identities.find(i => i.provider === 'discord')?.identity_data?.full_name || 'Not available'}
+              {user.identities.find((i) => i.provider === "discord")?.identity_data?.full_name || "Not available"}
             </span>
           </div>
         )}
 
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Email Verified</span>
-          <span className={`font-medium ${user.email_confirmed_at ? 'text-green-500' : 'text-amber-500'}`}>
-            {user.email_confirmed_at ? 'Yes' : 'No'}
+          <span className={`font-medium ${user.email_confirmed_at ? "text-green-500" : "text-amber-500"}`}>
+            {user.email_confirmed_at ? "Yes" : "No"}
           </span>
         </div>
       </div>

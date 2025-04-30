@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { AuthProvider } from "@/hooks/use-auth"
-import { Toaster } from "sonner"
+import { Toaster } from "@/components/ui/toaster"
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -32,7 +32,7 @@ export default function RootLayout({
             <Header />
             <main className="flex-1">{children}</main>
             <Footer />
-            <Toaster position="top-right" richColors />
+            <Toaster />
           </ThemeProvider>
         </AuthProvider>
       </body>

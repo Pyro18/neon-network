@@ -55,29 +55,29 @@ export default function ProfilePage() {
               <div className="space-y-3">
                 <Button variant="outline" className="w-full justify-start">
                   <DiscordLogoIcon className="w-4 h-4 mr-2" />
-                  {user.identities?.find(i => i.provider === 'discord') 
-                    ? 'Discord Connected' 
-                    : 'Connect Discord Account'}
+                  {user.identities?.find((i) => i.provider === "discord")
+                    ? "Discord Connected"
+                    : "Connect Discord Account"}
                 </Button>
               </div>
             </div>
 
             <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6">
               <h2 className="text-xl font-semibold mb-4">Account Actions</h2>
-              
+
               <div className="space-y-3">
                 <Link href="/auth/change-password">
                   <Button variant="outline" className="w-full justify-start">
                     Change Password
                   </Button>
                 </Link>
-                
+
                 <Button variant="outline" className="w-full justify-start">
                   Manage Email Preferences
                 </Button>
-                
-                <Button 
-                  variant="outline" 
+
+                <Button
+                  variant="outline"
                   className="w-full justify-start text-red-500 hover:text-red-500 hover:bg-red-500/10"
                 >
                   Delete Account
