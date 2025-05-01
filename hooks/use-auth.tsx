@@ -8,8 +8,14 @@ import {
 } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
 
-// Definire il tipo per i provider OAuth supportati da Supabase
+// Define the type for OAuth providers supported by Supabase
 type Provider = 'apple' | 'azure' | 'bitbucket' | 'discord' | 'facebook' | 'github' | 'gitlab' | 'google' | 'keycloak' | 'linkedin' | 'notion' | 'spotify' | 'slack' | 'twitch' | 'twitter' | 'workos' | 'zoom'
+
+// Define the type for Discord roles check
+type RoleCheckResult = {
+  hasRole: boolean
+  roles: string[]
+}
 
 type AuthContextType = {
   user: User | null
@@ -20,6 +26,7 @@ type AuthContextType = {
   signInWithOAuth: (provider: Provider) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
+  hasRole: (roleId: string | string[]) => RoleCheckResult
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -73,17 +80,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email,
         password,
         options: {
-          emailRedirectTo: 'http://localhost:3000/auth/callback',
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: userData
         }
       })
       
       if (error) return { error, user: null }
-      
-      // If successful and we have metadata to add, update the user separately
-      if (data?.user && Object.keys(userData).length > 0) {
-        await supabase.auth.updateUser({ data: userData })
-      }
-      
       return { error: null, user: data?.user ?? null }
     } catch (e) {
       console.error('Unexpected error during signUp:', e)
@@ -98,7 +100,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         options: {
           skipBrowserRedirect: false,
           redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: provider === 'discord' ? 'identify email' : undefined
+          // Request additional scopes for Discord to get user roles
+          scopes: provider === 'discord' ? 'identify email guilds.members.read' : undefined
         },
       });
       
@@ -123,6 +126,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error }
   }
 
+  /**
+   * Check if user has a specific Discord role or any of the roles in the array
+   */
+  const hasRole = (roleIdOrIds: string | string[]): RoleCheckResult => {
+    if (!user) {
+      return { hasRole: false, roles: [] }
+    }
+    
+    // Get the user's Discord roles from the identity data
+    const discordIdentity = user.identities?.find(
+      (identity) => identity.provider === "discord"
+    )
+    
+    const userRoles = discordIdentity?.identity_data?.["https://discord.com/roles"] || []
+    
+    // If checking for a single role
+    if (typeof roleIdOrIds === 'string') {
+      return { 
+        hasRole: userRoles.includes(roleIdOrIds),
+        roles: userRoles
+      }
+    }
+    
+    // If checking for any of multiple roles
+    return { 
+      hasRole: roleIdOrIds.some(roleId => userRoles.includes(roleId)),
+      roles: userRoles
+    }
+  }
+
   const value = {
     session,
     user,
@@ -132,6 +165,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signInWithOAuth,
     signOut,
     resetPassword,
+    hasRole
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

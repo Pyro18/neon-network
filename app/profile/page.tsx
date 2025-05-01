@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { UserProfile } from "@/components/auth/user-profile"
+import { DiscordRolesDisplay } from "@/components/auth/discord-roles-display"
 import { NeonParticles } from "@/components/neon-particles"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
@@ -49,18 +50,8 @@ export default function ProfilePage() {
           </div>
 
           <div className="md:col-span-4 space-y-6">
-            <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6">
-              <h2 className="text-xl font-semibold mb-4">Account Links</h2>
-
-              <div className="space-y-3">
-                <Button variant="outline" className="w-full justify-start">
-                  <DiscordLogoIcon className="w-4 h-4 mr-2" />
-                  {user.identities?.find((i) => i.provider === "discord")
-                    ? "Discord Connected"
-                    : "Connect Discord Account"}
-                </Button>
-              </div>
-            </div>
+            {/* Discord Roles Display */}
+            <DiscordRolesDisplay />
 
             <div className="bg-background/20 backdrop-blur-sm rounded-lg border border-border/30 p-6">
               <h2 className="text-xl font-semibold mb-4">Account Actions</h2>
