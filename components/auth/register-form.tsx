@@ -52,19 +52,22 @@ export function RegisterForm() {
 
   async function onSubmit(values: z.infer<typeof registerSchema>) {
     setIsLoading(true)
-    
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
-          emailRedirectTo: "http://localhost:3000/auth/callback",
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            username: values.username
+          }
         }
       })
-      
+
       if (error) {
         console.error("Registration error:", error)
-        
+
         if (error.message.includes("User already registered")) {
           toast.error("This email is already registered")
         } else {
@@ -72,30 +75,15 @@ export function RegisterForm() {
         }
         return
       }
-      
-      // Step 2: If successful, update the user with metadata
-      if (data?.user) {
-        try {
-          const { error: updateError } = await supabase.auth.updateUser({
-            data: { username: values.username }
-          })
-          
-          if (updateError) {
-            console.warn("Couldn't update username, but signup was successful:", updateError)
-          }
-        } catch (metadataError) {
-          console.warn("Error updating username:", metadataError)
-        }
-      }
-      
-      // Step 3: Direct user appropriately
+
+      // Check if email confirmation is required
       if (data?.user && !data.user.email_confirmed_at) {
         toast.success("Registration successful! Please check your email to confirm your account.")
         router.push("/auth/verify-email")
       } else {
+        // Auto-login successful (if email confirmation is disabled)
         toast.success("Account created successfully!")
         router.push("/")
-        router.refresh()
       }
     } catch (error) {
       console.error("Unexpected error during registration:", error)

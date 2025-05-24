@@ -2,11 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * GET /api/forum?type=stats
- * GET /api/forum?type=categories
- * GET /api/forum?type=threads&categoryId=&page=&limit=
- * GET /api/forum?type=thread&id=
- * GET /api/forum?type=recent&limit=
+ * GET /api/forum?type=stats|categories|threads|thread|recent
  */
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -16,58 +12,48 @@ export async function GET(request: NextRequest) {
   try {
     switch (type) {
       case 'stats': {
-        // Get forum statistics
-        const { data, error } = await supabase.rpc('get_forum_stats')
+        const stats = await supabase.rpc('get_forum_stats')
 
-        if (error) {
-          throw new Error(`Error fetching forum stats: ${error.message}`)
+        if (stats.error) {
+          throw new Error(`Error fetching forum stats: ${stats.error.message}`)
         }
 
-        // Get the newest member
+        // Get newest member
         const { data: newestMember } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_url, role, created_at')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-
-        // Get active user count
-        const { count: activeUserCount } = await supabase
-          .from('user_sessions')
-          .select('*', { count: 'exact' })
-          .gt('last_seen_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
-
-        // Get today's post count
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        const { count: todaysPosts } = await supabase
-          .from('forum_posts')
-          .select('*', { count: 'exact' })
-          .gte('created_at', today.toISOString())
+            .from('profiles')
+            .select('id, username, avatar_url, role, joined_at')
+            .order('joined_at', { ascending: false })
+            .limit(1)
+            .single()
 
         return NextResponse.json({
-          total_threads: data.total_threads || 0,
-          total_posts: data.total_posts || 0,
-          total_members: data.total_members || 0,
-          newest_member: newestMember || null,
-          active_user_count: activeUserCount || 0,
-          todays_posts: todaysPosts || 0
+          ...stats.data,
+          newest_member: newestMember
         })
       }
 
       case 'categories': {
-        // Get forum categories
         const { data, error } = await supabase
-          .from('forum_categories')
-          .select('*')
-          .order('sort_order', { ascending: true })
+            .from('forum_categories')
+            .select(`
+            *,
+            thread_count:forum_threads(count),
+            post_count:forum_posts(count)
+          `)
+            .order('sort_order', { ascending: true })
 
         if (error) {
           throw new Error(`Error fetching categories: ${error.message}`)
         }
 
-        return NextResponse.json(data)
+        // Transform the data to include counts
+        const categoriesWithCounts = data?.map(category => ({
+          ...category,
+          thread_count: category.thread_count?.[0]?.count || 0,
+          post_count: category.post_count?.[0]?.count || 0
+        }))
+
+        return NextResponse.json(categoriesWithCounts)
       }
 
       case 'threads': {
@@ -76,55 +62,26 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get('limit') || '10')
         const offset = (page - 1) * limit
 
-        // Build the query
         let query = supabase
-          .from('forum_threads')
-          .select(`
+            .from('forum_threads')
+            .select(`
             *,
             category:forum_categories(*),
-            author:profiles(id, username, avatar_url, role)
+            author:profiles(id, username, avatar_url, role),
+            last_reply_user:profiles!forum_threads_last_reply_by_fkey(username, avatar_url)
           `, { count: 'exact' })
 
         if (categoryId) {
           query = query.eq('category_id', categoryId)
         }
 
-        // Execute the query with pagination
         const { data: threads, error, count } = await query
-          .order('is_pinned', { ascending: false })
-          .order('updated_at', { ascending: false })
-          .range(offset, offset + limit - 1)
+            .order('is_pinned', { ascending: false })
+            .order('last_reply_at', { ascending: false })
+            .range(offset, offset + limit - 1)
 
         if (error) {
           throw new Error(`Error fetching threads: ${error.message}`)
-        }
-
-        // Get reply counts for each thread individually
-        const postCounts: Array<{ thread_id: string, count: string }> = [];
-        for (const thread of threads) {
-          const { count } = await supabase
-            .from('forum_posts')
-            .select('*', { count: 'exact' })
-            .eq('thread_id', thread.id);
-
-          if (count !== null) {
-            postCounts.push({ thread_id: thread.id, count: count.toString() });
-          }
-        }
-
-        if (postCounts.length > 0) {
-          // Create a map of thread ID to reply count
-          const replyCountMap = new Map<string, number>()
-          postCounts.forEach((item: { thread_id: string, count: string }) => {
-            // Subtract 1 to get reply count (excluding original post)
-            const count = parseInt(item.count) - 1
-            replyCountMap.set(item.thread_id, count > 0 ? count : 0)
-          })
-
-          // Add reply counts to threads
-          threads.forEach(thread => {
-            thread.reply_count = replyCountMap.get(thread.id) || 0
-          })
         }
 
         return NextResponse.json({
@@ -140,72 +97,60 @@ export async function GET(request: NextRequest) {
 
         if (!id) {
           return NextResponse.json(
-            { error: 'Thread ID is required' },
-            { status: 400 }
+              { error: 'Thread ID is required' },
+              { status: 400 }
           )
         }
 
-        // Get the thread with its category and author
+        // Get the thread
         const { data: thread, error: threadError } = await supabase
-          .from('forum_threads')
-          .select(`
+            .from('forum_threads')
+            .select(`
             *,
             category:forum_categories(*),
-            author:profiles(id, username, avatar_url, role, created_at, post_count)
+            author:profiles(id, username, avatar_url, role, joined_at, post_count)
           `)
-          .eq('id', id)
-          .single()
+            .eq('id', id)
+            .single()
 
         if (threadError) {
           throw new Error(`Error fetching thread: ${threadError.message}`)
         }
 
         // Increment view count
-        await supabase.rpc('increment_thread_view', { thread_id: id })
+        await supabase.rpc('increment_thread_view', { thread_uuid: id })
 
-        // Get the posts for this thread
+        // Get posts for this thread
         const { data: posts, error: postsError } = await supabase
-          .from('forum_posts')
-          .select(`
+            .from('forum_posts')
+            .select(`
             *,
-            author:profiles(id, username, avatar_url, role, created_at, post_count)
+            author:profiles(id, username, avatar_url, role, joined_at, post_count),
+            likes:forum_post_likes(count)
           `)
-          .eq('thread_id', id)
-          .order('created_at', { ascending: true })
+            .eq('thread_id', id)
+            .order('created_at', { ascending: true })
 
         if (postsError) {
           throw new Error(`Error fetching posts: ${postsError.message}`)
         }
 
-        // Get the current user to check if they liked any posts
+        // Check if current user liked any posts
         const { data: { session } } = await supabase.auth.getSession()
         const currentUserId = session?.user?.id
 
-        // If we have a logged in user, check which posts they've liked
         if (currentUserId && posts) {
-          const { data: likes } = await supabase
-            .from('forum_post_likes')
-            .select('post_id')
-            .eq('user_id', currentUserId)
+          const { data: userLikes } = await supabase
+              .from('forum_post_likes')
+              .select('post_id')
+              .eq('user_id', currentUserId)
 
-          const likedPostIds = likes?.map(like => like.post_id) || []
+          const likedPostIds = userLikes?.map(like => like.post_id) || []
 
-          // Add the liked_by_current_user flag to each post
           posts.forEach(post => {
             post.liked_by_current_user = likedPostIds.includes(post.id)
+            post.like_count = post.likes?.[0]?.count || 0
           })
-        }
-
-        // Get like counts for each post individually
-        if (posts && posts.length > 0) {
-          for (const post of posts) {
-            const { count } = await supabase
-              .from('forum_post_likes')
-              .select('*', { count: 'exact' })
-              .eq('post_id', post.id);
-
-            post.likes = count || 0;
-          }
         }
 
         return NextResponse.json({
@@ -217,46 +162,18 @@ export async function GET(request: NextRequest) {
       case 'recent': {
         const limit = parseInt(searchParams.get('limit') || '5')
 
-        // Get recent threads
         const { data, error } = await supabase
-          .from('forum_threads')
-          .select(`
+            .from('forum_threads')
+            .select(`
             *,
-            category:forum_categories(id, name),
+            category:forum_categories(id, name, color),
             author:profiles(id, username, avatar_url, role)
           `)
-          .order('updated_at', { ascending: false })
-          .limit(limit)
+            .order('updated_at', { ascending: false })
+            .limit(limit)
 
         if (error) {
           throw new Error(`Error fetching recent threads: ${error.message}`)
-        }
-
-        // Get reply counts for each thread individually
-        const postCounts: Array<{ thread_id: string, count: string }> = [];
-        for (const thread of data) {
-          const { count } = await supabase
-            .from('forum_posts')
-            .select('*', { count: 'exact' })
-            .eq('thread_id', thread.id);
-
-          if (count !== null) {
-            postCounts.push({ thread_id: thread.id, count: count.toString() });
-          }
-        }
-
-        if (postCounts.length > 0) {
-          // Create a map of thread ID to reply count
-          const replyCountMap = new Map<string, number>()
-          postCounts.forEach((item: { thread_id: string, count: string }) => {
-            const count = parseInt(item.count) - 1
-            replyCountMap.set(item.thread_id, count > 0 ? count : 0)
-          })
-
-          // Add reply counts to threads
-          data.forEach(thread => {
-            thread.reply_count = replyCountMap.get(thread.id) || 0
-          })
         }
 
         return NextResponse.json(data || [])
@@ -264,28 +181,21 @@ export async function GET(request: NextRequest) {
 
       default:
         return NextResponse.json(
-          { error: 'Invalid type parameter' },
-          { status: 400 }
+            { error: 'Invalid type parameter' },
+            { status: 400 }
         )
     }
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'An unknown error occurred' },
-      { status: 500 }
+        { error: error instanceof Error ? error.message : 'An unknown error occurred' },
+        { status: 500 }
     )
   }
 }
 
 /**
  * POST /api/forum
- * 
- * Create a new thread or post
- * 
- * Body: {
- *   action: 'create_thread' | 'create_post' | 'like_post' | 'report',
- *   [action-specific fields]
- * }
  */
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -294,8 +204,22 @@ export async function POST(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user) {
     return NextResponse.json(
-      { error: 'You must be logged in to perform this action' },
-      { status: 401 }
+        { error: 'You must be logged in to perform this action' },
+        { status: 401 }
+    )
+  }
+
+  // Check if user is banned
+  const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_banned, ban_reason')
+      .eq('id', session.user.id)
+      .single()
+
+  if (profile?.is_banned) {
+    return NextResponse.json(
+        { error: `Your account is banned: ${profile.ban_reason || 'No reason provided'}` },
+        { status: 403 }
     )
   }
 
@@ -309,20 +233,35 @@ export async function POST(request: NextRequest) {
 
         if (!title || !content || !categoryId) {
           return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
+              { error: 'Missing required fields' },
+              { status: 400 }
           )
         }
 
-        // Use the stored procedure to create the thread with its first post
+        // Check if user can pin/lock (only moderators and admins)
+        if (isPinned || isLocked) {
+          const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .single()
+
+          if (!userProfile || !['moderator', 'admin'].includes(userProfile.role)) {
+            return NextResponse.json(
+                { error: 'You do not have permission to pin or lock threads' },
+                { status: 403 }
+            )
+          }
+        }
+
         const { data: threadId, error } = await supabase
-          .rpc('create_thread_with_post', {
-            p_title: title,
-            p_content: content,
-            p_category_id: categoryId,
-            p_is_pinned: isPinned,
-            p_is_locked: isLocked
-          })
+            .rpc('create_thread_with_post', {
+              p_title: title,
+              p_content: content,
+              p_category_id: categoryId,
+              p_is_pinned: isPinned,
+              p_is_locked: isLocked
+            })
 
         if (error) {
           throw new Error(`Error creating thread: ${error.message}`)
@@ -336,54 +275,56 @@ export async function POST(request: NextRequest) {
 
         if (!threadId || !content) {
           return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
+              { error: 'Missing required fields' },
+              { status: 400 }
           )
         }
 
         // Check if thread is locked
         const { data: thread, error: threadError } = await supabase
-          .from('forum_threads')
-          .select('is_locked')
-          .eq('id', threadId)
-          .single()
+            .from('forum_threads')
+            .select('is_locked')
+            .eq('id', threadId)
+            .single()
 
         if (threadError) {
           throw new Error(`Error checking thread: ${threadError.message}`)
         }
 
         if (thread.is_locked) {
-          return NextResponse.json(
-            { error: 'This thread is locked and cannot receive new replies' },
-            { status: 403 }
-          )
+          // Check if user is moderator or admin
+          const { data: userProfile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .single()
+
+          if (!userProfile || !['moderator', 'admin'].includes(userProfile.role)) {
+            return NextResponse.json(
+                { error: 'This thread is locked and cannot receive new replies' },
+                { status: 403 }
+            )
+          }
         }
 
         // Create the post
         const { data: post, error } = await supabase
-          .from('forum_posts')
-          .insert({
-            thread_id: threadId,
-            author_id: session.user.id,
-            content,
-            is_original_post: false
-          })
-          .select('*')
-          .single()
+            .from('forum_posts')
+            .insert({
+              thread_id: threadId,
+              author_id: session.user.id,
+              content,
+              is_original_post: false
+            })
+            .select(`
+            *,
+            author:profiles(id, username, avatar_url, role, joined_at, post_count)
+          `)
+            .single()
 
         if (error) {
           throw new Error(`Error creating post: ${error.message}`)
         }
-
-        // Update the thread's updated_at timestamp
-        await supabase
-          .from('forum_threads')
-          .update({ updated_at: new Date().toISOString() })
-          .eq('id', threadId)
-
-        // Increment the user's post count
-        await supabase
-          .rpc('increment_user_post_count', { user_id: session.user.id })
 
         return NextResponse.json(post)
       }
@@ -393,30 +334,30 @@ export async function POST(request: NextRequest) {
 
         if (!postId) {
           return NextResponse.json(
-            { error: 'Post ID is required' },
-            { status: 400 }
+              { error: 'Post ID is required' },
+              { status: 400 }
           )
         }
 
-        // Check if user has already liked the post
+        // Check if user already liked the post
         const { data: existingLike, error: checkError } = await supabase
-          .from('forum_post_likes')
-          .select('*')
-          .eq('post_id', postId)
-          .eq('user_id', session.user.id)
-          .maybeSingle()
+            .from('forum_post_likes')
+            .select('*')
+            .eq('post_id', postId)
+            .eq('user_id', session.user.id)
+            .maybeSingle()
 
         if (checkError) {
           throw new Error(`Error checking like: ${checkError.message}`)
         }
 
         if (existingLike) {
-          // User already liked this post, so remove the like
+          // Remove like
           const { error: unlikeError } = await supabase
-            .from('forum_post_likes')
-            .delete()
-            .eq('post_id', postId)
-            .eq('user_id', session.user.id)
+              .from('forum_post_likes')
+              .delete()
+              .eq('post_id', postId)
+              .eq('user_id', session.user.id)
 
           if (unlikeError) {
             throw new Error(`Error removing like: ${unlikeError.message}`)
@@ -424,13 +365,13 @@ export async function POST(request: NextRequest) {
 
           return NextResponse.json({ liked: false })
         } else {
-          // User hasn't liked this post yet, so add a like
+          // Add like
           const { error: likeError } = await supabase
-            .from('forum_post_likes')
-            .insert({
-              post_id: postId,
-              user_id: session.user.id
-            })
+              .from('forum_post_likes')
+              .insert({
+                post_id: postId,
+                user_id: session.user.id
+              })
 
           if (likeError) {
             throw new Error(`Error adding like: ${likeError.message}`)
@@ -440,29 +381,29 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      case 'report': {
+      case 'report_content': {
         const { contentType, contentId, reason, details } = data
 
         if (!contentType || !contentId || !reason) {
           return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
+              { error: 'Missing required fields' },
+              { status: 400 }
           )
         }
 
         // Create report
         const { data: report, error } = await supabase
-          .from('forum_reports')
-          .insert({
-            reporter_id: session.user.id,
-            content_type: contentType,
-            content_id: contentId,
-            reason,
-            details: details || null,
-            status: 'pending'
-          })
-          .select('id')
-          .single()
+            .from('forum_reports')
+            .insert({
+              reporter_id: session.user.id,
+              content_type: contentType,
+              content_id: contentId,
+              reason,
+              details: details || null,
+              status: 'pending'
+            })
+            .select('id')
+            .single()
 
         if (error) {
           throw new Error(`Error creating report: ${error.message}`)
@@ -471,17 +412,52 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ reportId: report.id })
       }
 
+      case 'moderate_content': {
+        const { contentType, contentId, action: moderateAction, reason } = data
+
+        // Check if user is moderator or admin
+        const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
+
+        if (!userProfile || !['moderator', 'admin'].includes(userProfile.role)) {
+          return NextResponse.json(
+              { error: 'You do not have permission to moderate content' },
+              { status: 403 }
+          )
+        }
+
+        if (contentType === 'thread') {
+          const { error } = await supabase
+              .from('forum_threads')
+              .update({
+                is_locked: moderateAction === 'lock',
+                is_pinned: moderateAction === 'pin',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', contentId)
+
+          if (error) {
+            throw new Error(`Error moderating thread: ${error.message}`)
+          }
+        }
+
+        return NextResponse.json({ success: true })
+      }
+
       default:
         return NextResponse.json(
-          { error: 'Invalid action' },
-          { status: 400 }
+            { error: 'Invalid action' },
+            { status: 400 }
         )
     }
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'An unknown error occurred' },
-      { status: 500 }
+        { error: error instanceof Error ? error.message : 'An unknown error occurred' },
+        { status: 500 }
     )
   }
 }

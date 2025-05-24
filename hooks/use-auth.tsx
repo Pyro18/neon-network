@@ -1,24 +1,34 @@
 "use client"
 
 import { useState, useEffect, createContext, useContext } from 'react'
-import { 
-  User, 
+import {
+  User,
   Session,
-  AuthError, 
+  AuthError,
 } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
 
-// Define the type for OAuth providers supported by Supabase
-type Provider = 'apple' | 'azure' | 'bitbucket' | 'discord' | 'facebook' | 'github' | 'gitlab' | 'google' | 'keycloak' | 'linkedin' | 'notion' | 'spotify' | 'slack' | 'twitch' | 'twitter' | 'workos' | 'zoom'
+type Provider = 'discord' | 'apple' | 'azure' | 'bitbucket' | 'facebook' | 'github' | 'gitlab' | 'google' | 'keycloak' | 'linkedin' | 'notion' | 'spotify' | 'slack' | 'twitch' | 'twitter' | 'workos' | 'zoom'
 
-// Define the type for Discord roles check
-type RoleCheckResult = {
-  hasRole: boolean
-  roles: string[]
+type UserProfile = {
+  id: string
+  username: string
+  avatar_url?: string
+  role: 'member' | 'moderator' | 'admin'
+  discord_id?: string
+  post_count: number
+  reputation: number
+  bio?: string
+  location?: string
+  website?: string
+  joined_at: string
+  is_banned: boolean
+  ban_reason?: string
 }
 
 type AuthContextType = {
   user: User | null
+  profile: UserProfile | null
   session: Session | null
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
@@ -26,7 +36,11 @@ type AuthContextType = {
   signInWithOAuth: (provider: Provider) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
-  hasRole: (roleId: string | string[]) => RoleCheckResult
+  hasRole: (requiredRole: 'member' | 'moderator' | 'admin') => boolean
+  isAdmin: boolean
+  isModerator: boolean
+  canModerate: boolean
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -34,18 +48,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+
+      if (error) {
+        console.error('Error fetching profile:', error)
+        return null
+      }
+
+      return data as UserProfile
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+      return null
+    }
+  }
+
+  const refreshProfile = async () => {
+    if (user) {
+      const userProfile = await fetchUserProfile(user.id)
+      setProfile(userProfile)
+    }
+  }
+
   useEffect(() => {
-    // Get initial session
     const getSession = async () => {
       setIsLoading(true)
-      
+
       try {
         const { data: { session } } = await supabase.auth.getSession()
         setSession(session)
         setUser(session?.user ?? null)
+
+        if (session?.user) {
+          const userProfile = await fetchUserProfile(session.user.id)
+          setProfile(userProfile)
+        }
       } catch (error) {
         console.error('Error retrieving session:', error)
       } finally {
@@ -55,13 +101,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getSession()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        setIsLoading(false)
-      }
+        async (event, session) => {
+          console.log('Auth state changed:', event)
+          setSession(session)
+          setUser(session?.user ?? null)
+
+          if (session?.user) {
+            const userProfile = await fetchUserProfile(session.user.id)
+            setProfile(userProfile)
+          } else {
+            setProfile(null)
+          }
+
+          setIsLoading(false)
+        }
     )
 
     return () => {
@@ -84,7 +138,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           data: userData
         }
       })
-      
+
       if (error) return { error, user: null }
       return { error: null, user: data?.user ?? null }
     } catch (e) {
@@ -92,19 +146,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return { error: e as AuthError, user: null }
     }
   }
-  
+
   const signInWithOAuth = async (provider: Provider) => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           skipBrowserRedirect: false,
           redirectTo: `${window.location.origin}/auth/callback`,
-          // Request additional scopes for Discord to get user roles
           scopes: provider === 'discord' ? 'identify email guilds.members.read' : undefined
         },
       });
-      
+
       if (error) {
         console.error(`Error in signInWithOAuth for ${provider}:`, error);
         throw error;
@@ -117,6 +170,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    setProfile(null)
   }
 
   const resetPassword = async (email: string) => {
@@ -126,46 +180,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error }
   }
 
-  /**
-   * Check if user has a specific Discord role or any of the roles in the array
-   */
-  const hasRole = (roleIdOrIds: string | string[]): RoleCheckResult => {
-    if (!user) {
-      return { hasRole: false, roles: [] }
-    }
-    
-    // Get the user's Discord roles from the identity data
-    const discordIdentity = user.identities?.find(
-      (identity) => identity.provider === "discord"
-    )
-    
-    const userRoles = discordIdentity?.identity_data?.["https://discord.com/roles"] || []
-    
-    // If checking for a single role
-    if (typeof roleIdOrIds === 'string') {
-      return { 
-        hasRole: userRoles.includes(roleIdOrIds),
-        roles: userRoles
-      }
-    }
-    
-    // If checking for any of multiple roles
-    return { 
-      hasRole: roleIdOrIds.some(roleId => userRoles.includes(roleId)),
-      roles: userRoles
-    }
+  // Role-based authorization helpers
+  const hasRole = (requiredRole: 'member' | 'moderator' | 'admin'): boolean => {
+    if (!profile || profile.is_banned) return false
+
+    const roleHierarchy = { member: 0, moderator: 1, admin: 2 }
+    const userRoleLevel = roleHierarchy[profile.role] ?? -1
+    const requiredRoleLevel = roleHierarchy[requiredRole] ?? 0
+
+    return userRoleLevel >= requiredRoleLevel
   }
+
+  const isAdmin = profile?.role === 'admin' && !profile?.is_banned
+  const isModerator = (profile?.role === 'moderator' || profile?.role === 'admin') && !profile?.is_banned
+  const canModerate = isModerator || isAdmin
 
   const value = {
     session,
     user,
+    profile,
     isLoading,
     signIn,
     signUp,
     signInWithOAuth,
     signOut,
     resetPassword,
-    hasRole
+    hasRole,
+    isAdmin,
+    isModerator,
+    canModerate,
+    refreshProfile
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
