@@ -4,9 +4,9 @@
  * Custom hooks for interacting with forum data
  */
 import { useCallback, useEffect, useState } from 'react'
-import { 
-  getForumCategories, 
-  getForumThreads, 
+import {
+  getForumCategories,
+  getForumThreads,
   getRecentThreads,
   getThreadById,
   createThread,
@@ -32,14 +32,14 @@ export function useForumCategories() {
     const fetchCategories = async () => {
       setIsLoading(true)
       setError(null)
-      
+
       try {
         const { data, error } = await getForumCategories()
-        
+
         if (error) {
           throw error
         }
-        
+
         if (data) {
           setCategories(data)
         }
@@ -71,9 +71,9 @@ export function useForumThreads(options: {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
-  const { 
-    categoryId, 
-    page = 1, 
+  const {
+    categoryId,
+    page = 1,
     limit = 10,
     includeReplyCounts = true
   } = options
@@ -81,7 +81,7 @@ export function useForumThreads(options: {
   const fetchThreads = useCallback(async () => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const { data, error } = await getForumThreads({
         categoryId,
@@ -89,11 +89,11 @@ export function useForumThreads(options: {
         limit,
         includeReplyCounts
       })
-      
+
       if (error) {
         throw error
       }
-      
+
       if (data) {
         setThreads(data.threads)
         setTotalThreads(data.total)
@@ -110,12 +110,12 @@ export function useForumThreads(options: {
     fetchThreads()
   }, [fetchThreads])
 
-  return { 
-    threads, 
-    totalThreads, 
+  return {
+    threads,
+    totalThreads,
     totalPages: Math.ceil(totalThreads / limit),
     currentPage: page,
-    isLoading, 
+    isLoading,
     error,
     refresh: fetchThreads
   }
@@ -133,14 +133,14 @@ export function useRecentThreads(limit = 5) {
     const fetchRecentThreads = async () => {
       setIsLoading(true)
       setError(null)
-      
+
       try {
         const { data, error } = await getRecentThreads(limit)
-        
+
         if (error) {
           throw error
         }
-        
+
         if (data) {
           setThreads(data)
         }
@@ -159,6 +159,43 @@ export function useRecentThreads(limit = 5) {
 }
 
 /**
+ * Hook for fetching forum statistics
+ */
+export function useForumStats() {
+  const [stats, setStats] = useState<Partial<ForumStats>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  const fetchStats = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { data, error } = await getForumStats()
+
+      if (error) {
+        throw error
+      }
+
+      if (data) {
+        setStats(data)
+      }
+    } catch (e) {
+      console.error('Error fetching forum stats:', e)
+      setError(e as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  return { stats, isLoading, error, refresh: fetchStats }
+}
+
+/**
  * Hook for fetching a single thread with its posts
  */
 export function useThread(threadId: string) {
@@ -169,17 +206,17 @@ export function useThread(threadId: string) {
 
   const fetchThread = useCallback(async () => {
     if (!threadId) return
-    
+
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const { data, error } = await getThreadById(threadId)
-      
+
       if (error) {
         throw error
       }
-      
+
       if (data) {
         setThread(data.thread)
         setPosts(data.posts)
@@ -199,11 +236,11 @@ export function useThread(threadId: string) {
   const likePost = async (postId: string) => {
     try {
       const { data, error } = await togglePostLike(postId)
-      
+
       if (error) {
         throw error
       }
-      
+
       // Update the local posts array with the new like status
       if (data) {
         setPosts(prev => prev.map(post => {
@@ -212,13 +249,13 @@ export function useThread(threadId: string) {
             return {
               ...post,
               liked_by_current_user: data.liked,
-              likes: (post.likes || 0) + likeDelta
+              like_count: Math.max(0, (post.like_count || 0) + likeDelta)
             }
           }
           return post
         }))
       }
-      
+
       return { success: true }
     } catch (e) {
       console.error('Error liking post:', e)
@@ -232,14 +269,14 @@ export function useThread(threadId: string) {
         threadId,
         content
       })
-      
+
       if (error) {
         throw error
       }
-      
+
       // If successful, refresh the thread to get the new post
       await fetchThread()
-      
+
       return { success: true }
     } catch (e) {
       console.error('Error adding reply:', e)
@@ -255,11 +292,11 @@ export function useThread(threadId: string) {
   }) => {
     try {
       const { data, error } = await reportContent(params)
-      
+
       if (error) {
         throw error
       }
-      
+
       return { success: true, reportId: data?.reportId }
     } catch (e) {
       console.error('Error reporting content:', e)
@@ -267,10 +304,10 @@ export function useThread(threadId: string) {
     }
   }
 
-  return { 
-    thread, 
-    posts, 
-    isLoading, 
+  return {
+    thread,
+    posts,
+    isLoading,
     error,
     refresh: fetchThread,
     likePost,

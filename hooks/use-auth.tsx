@@ -22,8 +22,11 @@ type UserProfile = {
   location?: string
   website?: string
   joined_at: string
+  updated_at: string
+  last_seen_at: string
   is_banned: boolean
   ban_reason?: string
+  ban_expires_at?: string
 }
 
 type AuthContextType = {
@@ -52,6 +55,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
+  const createUserProfile = async (user: User) => {
+    try {
+      // Extract user info from various OAuth providers
+      const username = user.user_metadata?.username ||
+          user.user_metadata?.preferred_username ||
+          user.user_metadata?.name ||
+          user.email?.split('@')[0] ||
+          'user'
+
+      const avatar_url = user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          null
+
+      // Determine user role (default to 'member')
+      let role = 'member'
+
+      const { data, error } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            username: username,
+            avatar_url: avatar_url,
+            role: role,
+            discord_id: user.user_metadata?.provider_id || null,
+            post_count: 0,
+            reputation: 0,
+            is_banned: false,
+            joined_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString()
+          }, {
+            onConflict: 'id',
+            ignoreDuplicates: false
+          })
+
+      if (error) {
+        console.error('Error creating profile:', error)
+        throw error
+      }
+
+      console.log('User profile created/updated successfully')
+      return data
+    } catch (error) {
+      console.error('Profile creation error:', error)
+      throw error
+    }
+  }
+
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -61,6 +112,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .single()
 
       if (error) {
+        // Se il profilo non esiste, crealo
+        if (error.code === 'PGRST116' && user) {
+          console.log('Profile not found, creating new profile...')
+          await createUserProfile(user)
+          // Riprova a recuperare il profilo
+          const { data: newData, error: newError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userId)
+              .single()
+
+          if (newError) {
+            console.error('Error fetching new profile:', newError)
+            return null
+          }
+
+          return newData as UserProfile
+        }
+
         console.error('Error fetching profile:', error)
         return null
       }
