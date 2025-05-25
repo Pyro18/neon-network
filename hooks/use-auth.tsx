@@ -36,7 +36,7 @@ type AuthContextType = {
   signInWithOAuth: (provider: Provider) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
-  hasRole: (requiredRole: 'member' | 'moderator' | 'admin') => boolean
+  hasRole: (requiredRole: 'member' | 'moderator' | 'admin' | string | string[]) => { hasRole: boolean }
   isAdmin: boolean
   isModerator: boolean
   canModerate: boolean
@@ -181,14 +181,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   // Role-based authorization helpers
-  const hasRole = (requiredRole: 'member' | 'moderator' | 'admin'): boolean => {
-    if (!profile || profile.is_banned) return false
+  const hasRole = (requiredRole: 'member' | 'moderator' | 'admin' | string | string[]): { hasRole: boolean } => {
+    if (!profile || profile.is_banned) return { hasRole: false }
 
-    const roleHierarchy = { member: 0, moderator: 1, admin: 2 }
-    const userRoleLevel = roleHierarchy[profile.role] ?? -1
-    const requiredRoleLevel = roleHierarchy[requiredRole] ?? 0
+    // Handle single role string
+    if (typeof requiredRole === 'string') {
+      const roleHierarchy = { member: 0, moderator: 1, admin: 2 }
+      const userRoleLevel = roleHierarchy[profile.role as keyof typeof roleHierarchy] ?? -1
+      const requiredRoleLevel = roleHierarchy[requiredRole as keyof typeof roleHierarchy] ?? 0
 
-    return userRoleLevel >= requiredRoleLevel
+      return { hasRole: userRoleLevel >= requiredRoleLevel }
+    }
+
+    // Handle array of roles
+    if (Array.isArray(requiredRole)) {
+      const hasAnyRole = requiredRole.some(role => {
+        const roleHierarchy = { member: 0, moderator: 1, admin: 2 }
+        const userRoleLevel = roleHierarchy[profile.role as keyof typeof roleHierarchy] ?? -1
+        const requiredRoleLevel = roleHierarchy[role as keyof typeof roleHierarchy] ?? 0
+        return userRoleLevel >= requiredRoleLevel
+      })
+      return { hasRole: hasAnyRole }
+    }
+
+    return { hasRole: false }
   }
 
   const isAdmin = profile?.role === 'admin' && !profile?.is_banned

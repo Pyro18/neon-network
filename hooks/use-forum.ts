@@ -297,63 +297,39 @@ export function useCreateThread() {
     setError(null)
 
     try {
-      const result = await createThread(data)
-      
-      if (result.error) {
-        throw result.error
+      // Use the API endpoint instead of the direct function
+      const response = await fetch('/api/forum', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create_thread',
+          title: data.title,
+          content: data.content,
+          categoryId: data.categoryId,
+          isPinned: data.isPinned || false,
+          isLocked: data.isLocked || false,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to create thread')
       }
-      
-      return { success: true, threadId: result.data?.threadId }
+
+      const result = await response.json()
+
+      return { success: true, threadId: result.threadId }
     } catch (e) {
       console.error('Error creating thread:', e)
-      setError(e as Error)
-      return { success: false, error: e }
+      const errorObj = e as Error
+      setError(errorObj)
+      return { success: false, error: errorObj }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return { createNewThread, isSubmitting, error }
-}
-
-/**
- * Hook for fetching forum statistics
- */
-export function useForumStats() {
-  const [stats, setStats] = useState<ForumStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      setIsLoading(true)
-      setError(null)
-      
-      try {
-        const { data, error } = await getForumStats()
-        
-        if (error) {
-          throw error
-        }
-        
-        if (data) {
-          setStats(data)
-        }
-      } catch (e) {
-        console.error('Error fetching forum stats:', e)
-        setError(e as Error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchStats()
-
-    // Refresh stats periodically (every 30 seconds)
-    const intervalId = setInterval(fetchStats, 30000)
-    
-    return () => clearInterval(intervalId)
-  }, [])
-
-  return { stats, isLoading, error }
 }
